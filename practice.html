@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LR Practice</title>
+  <link rel="stylesheet" href="./css/styles.css" />
+</head>
+<body>
+  <div class="teal-bar"></div>
+  <div class="page">
+    <header class="practice-header">
+      <div id="question-count" class="meta">Question 0 of 0</div>
+      <button id="redo-btn" class="btn">重做</button>
+    </header>
+
+    <main class="practice-card">
+      <h1 class="practice-title">Listen and repeat only once.</h1>
+
+      <section id="picture-wrap" class="picture-wrap hidden">
+        <img id="picture-img" alt="Question visual" />
+      </section>
+
+      <section class="audio-block">
+        <div class="block-title">Prompt</div>
+        <div class="audio-pill" id="prompt-pill">
+          <button id="prompt-play" class="icon-button" aria-label="Play prompt">
+            ▶
+          </button>
+          <input id="prompt-progress" type="range" min="0" max="100" value="0" />
+          <div id="prompt-time" class="audio-time">0:00</div>
+        </div>
+        <audio id="prompt-audio" preload="metadata"></audio>
+      </section>
+
+      <section class="timer-card">
+        <div class="timer-header">RESPONSE TIME</div>
+        <div class="timer-body">
+          <div class="timer-icon">🎙️</div>
+          <div id="timer-count" class="timer-count">--</div>
+          <div id="recording-status" class="timer-status"></div>
+        </div>
+      </section>
+
+      <section class="audio-block">
+        <div class="block-title">我的录音</div>
+        <div class="audio-pill" id="recording-pill">
+          <button id="recording-play" class="icon-button" aria-label="Play recording">
+            ▶
+          </button>
+          <input id="recording-progress" type="range" min="0" max="100" value="0" />
+          <div id="recording-time" class="audio-time">0:00</div>
+        </div>
+        <div id="recording-message" class="meta"></div>
+        <audio id="recording-audio" preload="metadata"></audio>
+      </section>
+
+      <section class="practice-actions">
+        <div class="nav-buttons">
+          <button id="prev-btn" class="btn">Prev</button>
+          <button id="next-btn" class="btn">Next</button>
+        </div>
+        <button id="download-btn" class="btn btn-primary">Download</button>
+      </section>
+    </main>
+
+    <section id="practice-empty" class="card hidden">
+      <h2>No data available</h2>
+      <p>Please return to the homepage and import the Excel file.</p>
+      <a class="btn btn-primary" href="./index.html">Go to Home</a>
+    </section>
+  </div>
+
+  <script src="./js/vendor/xlsx.full.min.js"></script>
+  <script src="./js/app.js"></script>
+  <script src="./js/data.seed.js"></script>
+  <script src="./js/data.js"></script>
+  <script src="./js/practice.js"></script>
+</body>
+</html>

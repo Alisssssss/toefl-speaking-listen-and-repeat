@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LR Practice</title>
+  <link rel="stylesheet" href="./css/styles.css" />
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <div>
+        <h1>LR Practice</h1>
+        <p class="subtitle">Filter, select, and practice with a clean, focused flow.</p>
+      </div>
+    </header>
+
+    <section id="import-area" class="import-card hidden">
+      <div class="import-text">
+        <h2>Import Excel</h2>
+        <p>Running in offline mode. Please select <strong>TestData.xlsx</strong> from this folder.</p>
+        <div id="import-status" class="meta"></div>
+      </div>
+      <div class="import-actions">
+        <input id="import-file" type="file" accept=".xlsx" class="hidden" />
+        <button id="import-button" class="btn btn-primary">Choose File</button>
+      </div>
+    </section>
+
+    <section class="card filters">
+      <div class="section-title">Filters</div>
+      <div class="filters-grid">
+        <div class="filter-group" data-filter="date">
+          <label>Date</label>
+          <details class="dropdown">
+            <summary>Choose</summary>
+            <div class="dropdown-list" id="filter-date"></div>
+          </details>
+        </div>
+        <div class="filter-group" data-filter="set">
+          <label>Set</label>
+          <details class="dropdown">
+            <summary>Choose</summary>
+            <div class="dropdown-list" id="filter-set"></div>
+          </details>
+        </div>
+        <div class="filter-group" data-filter="scene">
+          <label>Scene</label>
+          <details class="dropdown">
+            <summary>Choose</summary>
+            <div class="dropdown-list" id="filter-scene"></div>
+          </details>
+        </div>
+        <div class="filter-group" data-filter="type">
+          <label>Type</label>
+          <details class="dropdown">
+            <summary>Choose</summary>
+            <div class="dropdown-list" id="filter-type"></div>
+          </details>
+        </div>
+        <div class="filter-group" data-filter="time">
+          <label>Time (s)</label>
+          <div class="range">
+            <input id="filter-time-min" type="number" placeholder="Min" />
+            <span>–</span>
+            <input id="filter-time-max" type="number" placeholder="Max" />
+          </div>
+        </div>
+        <div class="filter-group" data-filter="length">
+          <label>Length</label>
+          <div class="range">
+            <input id="filter-length-min" type="number" placeholder="Min" />
+            <span>–</span>
+            <input id="filter-length-max" type="number" placeholder="Max" />
+          </div>
+        </div>
+        <div class="filter-group" data-filter="difficulty">
+          <label>Difficulty</label>
+          <div class="range">
+            <input id="filter-difficulty-min" type="number" placeholder="Min" />
+            <span>–</span>
+            <input id="filter-difficulty-max" type="number" placeholder="Max" />
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card results">
+      <div class="results-header">
+        <div>
+          <div class="section-title">Questions</div>
+          <div id="results-count" class="meta">Showing 0 / 0</div>
+        </div>
+        <div class="actions">
+          <button id="remove-selected" class="btn">Remove selected</button>
+          <button id="practice-selected" class="btn btn-primary" disabled>Practice selected (0)</button>
+        </div>
+      </div>
+      <div id="results-list" class="results-list"></div>
+    </section>
+  </div>
+
+  <div id="confirm-modal" class="modal hidden" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="modal-content">
+      <h3>Start practice?</h3>
+      <p id="confirm-text">You are about to practice selected items.</p>
+      <div class="modal-actions">
+        <button id="confirm-cancel" class="btn">Cancel</button>
+        <button id="confirm-ok" class="btn btn-primary">Start</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="./js/vendor/xlsx.full.min.js"></script>
+  <script src="./js/app.js"></script>
+  <script src="./js/data.seed.js"></script>
+  <script src="./js/data.js"></script>
+  <script src="./js/home.js"></script>
+</body>
+</html>
