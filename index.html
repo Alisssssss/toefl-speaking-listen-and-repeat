@@ -17,18 +17,25 @@
 
     <section id="import-area" class="import-card hidden">
       <div class="import-text">
-        <h2>Import Excel</h2>
-        <p>Running in offline mode. Please select <strong>TestData.xlsx</strong> from this folder.</p>
+        <h2>Import JSON</h2>
+        <p>Select <strong>TestData.json</strong> from this folder.</p>
         <div id="import-status" class="meta"></div>
       </div>
       <div class="import-actions">
-        <input id="import-file" type="file" accept=".xlsx" class="hidden" />
-        <button id="import-button" class="btn btn-primary">Choose File</button>
+        <input id="import-file" type="file" accept=".json" class="hidden" />
+        <button id="import-button" class="btn btn-primary">Choose JSON</button>
       </div>
     </section>
 
     <section class="card filters">
-      <div class="section-title">Filters</div>
+      <div class="section-header">
+        <div class="section-title">Filters</div>
+        <div class="section-controls">
+          <span id="data-source-badge" class="badge">Data source: cached</span>
+          <button id="refresh-data" class="btn btn-small" type="button">Refresh Data</button>
+        </div>
+      </div>
+      <div id="refresh-banner" class="banner hidden" role="status" aria-live="polite"></div>
       <div class="filters-grid">
         <div class="filter-group" data-filter="date">
           <label>Date</label>
@@ -96,6 +103,10 @@
           <button id="practice-selected" class="btn btn-primary" disabled>Practice selected (0)</button>
         </div>
       </div>
+      <div class="results-actions">
+        <button id="select-all-filtered" class="btn btn-small" type="button">Select all (filtered)</button>
+        <button id="clear-selection" class="btn btn-small" type="button">Clear selection</button>
+      </div>
       <div id="results-list" class="results-list"></div>
     </section>
   </div>
@@ -111,9 +122,7 @@
     </div>
   </div>
 
-  <script src="./js/vendor/xlsx.full.min.js"></script>
   <script src="./js/app.js"></script>
-  <script src="./js/data.seed.js"></script>
   <script src="./js/data.js"></script>
   <script src="./js/home.js"></script>
 </body>

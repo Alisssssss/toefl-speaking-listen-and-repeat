@@ -1,155 +1,146 @@
 (function () {
   const utils = window.LR.utils;
   const STORAGE_KEY = "LR_DATA_JSON";
-  const LEGACY_KEY = "LR_DATA_CACHE";
+  const VERSION_KEY = "LR_DATA_VERSION";
 
-  function normalizeHeader(header) {
-    if (!header) return "";
-    return String(header)
-      .toLowerCase()
-      .trim()
-      .replace(/\s+/g, "")
-      .replace(/[^a-z0-9#\/]/g, "");
-  }
+  function normalizeItem(item) {
+    const date = item.date ?? item.Date ?? item.DATE ?? "";
+    const set = item.set ?? item.Set ?? item.SET ?? "";
+    const num =
+      item.num ??
+      item.Number ??
+      item.number ??
+      item.No ??
+      item.no ??
+      item["#"] ??
+      item["No."] ??
+      "";
+    const timeValue =
+      item.timeSec ??
+      item.timesec ??
+      item.time_sec ??
+      item.Time ??
+      item["Time/s"] ??
+      item.time ??
+      item.times ??
+      "";
+    const lengthValue = item.length ?? item.Length ?? "";
+    const difficultyValue = item.difficulty ?? item.Difficulty ?? "";
 
-  function headerKey(header) {
-    const normalized = normalizeHeader(header);
-    const map = {
-      date: "Date",
-      set: "Set",
-      "#": "#",
-      no: "#",
-      number: "#",
-      times: "Time/s",
-      "time/s": "Time/s",
-      time: "Time/s",
-      scene: "Scene",
-      prompt: "Prompt",
-      audio: "Audio",
-      script: "Script",
-      type: "Type",
-      length: "Length",
-      difficulty: "Difficulty",
-      picture: "Picture",
+    const dateStr = date === null || date === undefined ? "" : String(date).trim();
+    const setStr = set === null || set === undefined ? "" : String(set).trim();
+    const numStr = num === null || num === undefined ? "" : String(num).trim();
+    const fallbackId = `${dateStr}_${setStr}_${numStr}`;
+
+    return {
+      id: item.id ? String(item.id) : fallbackId,
+      date: dateStr,
+      set: setStr,
+      num: numStr,
+      timeSec: utils.toNumber(timeValue),
+      scene: item.scene ?? item.Scene ?? "",
+      type: item.type ?? item.Type ?? "",
+      length: utils.toNumber(lengthValue),
+      difficulty: utils.toNumber(difficultyValue),
+      prompt: item.prompt ?? item.Prompt ?? "",
+      script: item.script ?? item.Script ?? "",
+      audio: item.audio ?? item.Audio ?? "",
+      picture: item.picture ?? item.Picture ?? "",
     };
-    return map[normalized] || "";
   }
 
-  function padValue(value) {
-    const str = value === null || value === undefined ? "" : String(value).trim();
-    if (!str) return "00";
-    const num = Number(str);
-    if (Number.isFinite(num)) {
-      return Math.floor(num).toString().padStart(2, "0");
-    }
-    return str.padStart(2, "0");
+  function extractItems(payload) {
+    if (Array.isArray(payload)) return payload;
+    if (payload && Array.isArray(payload.items)) return payload.items;
+    return [];
   }
 
-  function parseRows(rows) {
-    if (!rows || !rows.length) return [];
-    const headerRow = rows[0];
-    const headerMap = {};
-    headerRow.forEach((header, index) => {
-      const key = headerKey(header);
-      if (key) headerMap[key] = index;
-    });
-
-    const result = [];
-    for (let i = 1; i < rows.length; i += 1) {
-      const row = rows[i];
-      if (!row || row.every((cell) => cell === null || cell === undefined || String(cell).trim() === "")) {
-        continue;
-      }
-
-      const date = row[headerMap.Date] || "";
-      const set = row[headerMap.Set] || "";
-      const num = row[headerMap["#"]] || "";
-      const timeValue = row[headerMap["Time/s"]];
-      const lengthValue = row[headerMap.Length];
-      const difficultyValue = row[headerMap.Difficulty];
-
-      const setPadded = padValue(set);
-      const numPadded = padValue(num);
-      const id = `${date}_${setPadded}_${numPadded}`;
-
-      result.push({
-        id,
-        Date: date,
-        Set: set,
-        SetPadded: setPadded,
-        Number: num,
-        NumberPadded: numPadded,
-        Time: utils.toNumber(timeValue),
-        Scene: row[headerMap.Scene] || "",
-        Prompt: row[headerMap.Prompt] || "",
-        Audio: row[headerMap.Audio] || "",
-        Script: row[headerMap.Script] || "",
-        Type: row[headerMap.Type] || "",
-        Length: utils.toNumber(lengthValue),
-        Difficulty: utils.toNumber(difficultyValue),
-        Picture: row[headerMap.Picture] || "",
-      });
-    }
-
-    return result;
+  function normalizePayload(payload) {
+    const items = extractItems(payload);
+    const rows = items
+      .map(normalizeItem)
+      .filter((row) => row && row.id && Number.isFinite(row.timeSec) && row.timeSec > 0);
+    const version = payload && payload.version ? String(payload.version) : "";
+    return { rows, version };
   }
 
-  function parseWorkbook(workbook) {
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json(sheet, {
-      header: 1,
-      raw: false,
-      defval: "",
-    });
-    return parseRows(rows);
-  }
-
-  async function fetchExcel(url) {
+  async function fetchJson(url) {
     const response = await fetch(url, { cache: "no-store" });
     if (!response.ok) throw new Error("Fetch failed");
-    const arrayBuffer = await response.arrayBuffer();
-    const workbook = XLSX.read(arrayBuffer, { type: "array" });
-    return parseWorkbook(workbook);
+    return response.json();
+  }
+
+  function isCacheInvalid(rows) {
+    if (!Array.isArray(rows) || !rows.length) return true;
+    return rows.some((row) => {
+      if (!row) return true;
+      if (row.Date !== undefined || row.Time !== undefined) return true;
+      if (!Number.isFinite(row.timeSec) || row.timeSec <= 0) return true;
+      return false;
+    });
   }
 
   function loadCache() {
-    const primary = utils.getStorage(STORAGE_KEY, null);
-    if (primary) return primary;
-    return utils.getStorage(LEGACY_KEY, null);
-  }
-
-  function saveCache(rows) {
-    utils.setStorage(STORAGE_KEY, rows);
-    utils.setStorage(LEGACY_KEY, rows);
-  }
-
-  async function loadData() {
-    if (location.protocol === "file:") {
-      if (Array.isArray(window.LR_DATA_SEED) && window.LR_DATA_SEED.length) {
-        saveCache(window.LR_DATA_SEED);
-        return { status: "ok", rows: window.LR_DATA_SEED, source: "seed" };
+    const cached = utils.getStorage(STORAGE_KEY, null);
+    if (cached && isCacheInvalid(cached)) {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(VERSION_KEY);
+      } catch (err) {
+        // Ignore storage cleanup errors.
       }
+      return null;
+    }
+    return cached;
+  }
+
+  function saveCache(rows, version) {
+    utils.setStorage(STORAGE_KEY, rows);
+    if (version) {
+      utils.setStorage(VERSION_KEY, version);
     } else {
       try {
-        const rows = await fetchExcel("./TestData.xlsx");
-        saveCache(rows);
-        return { status: "ok", rows, source: "fetch" };
+        localStorage.removeItem(VERSION_KEY);
       } catch (err) {
-        const cached = loadCache();
-        if (cached) {
-          return { status: "ok", rows: cached, source: "cache" };
-        }
-        return { status: "need_import" };
+        // Ignore storage cleanup errors.
       }
     }
+  }
 
-    const cached = loadCache();
-    if (cached) {
-      return { status: "ok", rows: cached, source: "cache" };
+  async function loadData(options) {
+    const opts = options || {};
+    const allowCache = opts.allowCache !== false;
+    const forceFetch = Boolean(opts.forceFetch);
+    const cached = allowCache ? loadCache() : null;
+
+    if (location.protocol === "file:") {
+      if (cached) {
+        return { status: "ok", rows: cached, source: "cache" };
+      }
+      return { status: "need_import", error: "Offline mode: please import TestData.json again." };
     }
 
-    return { status: "need_import" };
+    if (!forceFetch && cached) {
+      // Still attempt a fresh fetch; cached is used only as fallback.
+    }
+
+    try {
+      const payload = await fetchJson(`./TestData.json?ts=${Date.now()}`);
+      const normalized = normalizePayload(payload);
+      const version = normalized.version || String(Date.now());
+      saveCache(normalized.rows, version);
+      console.log("[data] first item", normalized.rows[0]);
+      console.log("[data] timeSec sample", normalized.rows.slice(0, 3).map((x) => x.timeSec));
+      return { status: "ok", rows: normalized.rows, source: "fetch", version };
+    } catch (err) {
+      if (cached) {
+        return { status: "ok", rows: cached, source: "cache" };
+      }
+      return {
+        status: "need_import",
+        error: err && err.message ? err.message : "Failed to load TestData.json",
+      };
+    }
   }
 
   function parseFile(file) {
@@ -157,15 +148,18 @@
       const reader = new FileReader();
       reader.onload = function () {
         try {
-          const data = new Uint8Array(reader.result);
-          const workbook = XLSX.read(data, { type: "array" });
-          resolve(parseWorkbook(workbook));
+          const payload = JSON.parse(reader.result);
+          const normalized = normalizePayload(payload);
+          const version = normalized.version || String(Date.now());
+          console.log("[data] first item", normalized.rows[0]);
+          console.log("[data] timeSec sample", normalized.rows.slice(0, 3).map((x) => x.timeSec));
+          resolve({ rows: normalized.rows, version });
         } catch (err) {
           reject(err);
         }
       };
       reader.onerror = reject;
-      reader.readAsArrayBuffer(file);
+      reader.readAsText(file);
     });
   }
 

@@ -2,6 +2,7 @@
   const utils = window.LR.utils;
   const dataApi = window.LR.data;
   const SELECTED_KEY = "LR_SELECTED_IDS";
+  const DATA_KEY = "LR_DATA_JSON";
 
   const state = {
     rows: [],
@@ -17,10 +18,15 @@
     resultsList: utils.qs("#results-list"),
     removeSelected: utils.qs("#remove-selected"),
     practiceSelected: utils.qs("#practice-selected"),
+    selectAllFiltered: utils.qs("#select-all-filtered"),
+    clearSelection: utils.qs("#clear-selection"),
     confirmModal: utils.qs("#confirm-modal"),
     confirmText: utils.qs("#confirm-text"),
     confirmCancel: utils.qs("#confirm-cancel"),
     confirmOk: utils.qs("#confirm-ok"),
+    refreshData: utils.qs("#refresh-data"),
+    dataSourceBadge: utils.qs("#data-source-badge"),
+    refreshBanner: utils.qs("#refresh-banner"),
     filterDate: utils.qs("#filter-date"),
     filterSet: utils.qs("#filter-set"),
     filterScene: utils.qs("#filter-scene"),
@@ -32,6 +38,8 @@
     filterDifficultyMin: utils.qs("#filter-difficulty-min"),
     filterDifficultyMax: utils.qs("#filter-difficulty-max"),
   };
+
+  let filtersBound = false;
 
   function saveSelected() {
     utils.setStorage(SELECTED_KEY, Array.from(state.selected));
@@ -78,16 +86,16 @@
     const difficultyMax = utils.toNumber(elements.filterDifficultyMax.value);
 
     return state.rows.filter((row) => {
-      if (dateVals.length && !dateVals.includes(String(row.Date))) return false;
-      if (setVals.length && !setVals.includes(String(row.Set))) return false;
-      if (sceneVals.length && !sceneVals.includes(String(row.Scene))) return false;
-      if (typeVals.length && !typeVals.includes(String(row.Type))) return false;
-      if (timeMin !== null && (row.Time === null || row.Time < timeMin)) return false;
-      if (timeMax !== null && (row.Time === null || row.Time > timeMax)) return false;
-      if (lengthMin !== null && (row.Length === null || row.Length < lengthMin)) return false;
-      if (lengthMax !== null && (row.Length === null || row.Length > lengthMax)) return false;
-      if (difficultyMin !== null && (row.Difficulty === null || row.Difficulty < difficultyMin)) return false;
-      if (difficultyMax !== null && (row.Difficulty === null || row.Difficulty > difficultyMax)) return false;
+      if (dateVals.length && !dateVals.includes(String(row.date))) return false;
+      if (setVals.length && !setVals.includes(String(row.set))) return false;
+      if (sceneVals.length && !sceneVals.includes(String(row.scene))) return false;
+      if (typeVals.length && !typeVals.includes(String(row.type))) return false;
+      if (timeMin !== null && (row.timeSec === null || row.timeSec < timeMin)) return false;
+      if (timeMax !== null && (row.timeSec === null || row.timeSec > timeMax)) return false;
+      if (lengthMin !== null && (row.length === null || row.length < lengthMin)) return false;
+      if (lengthMax !== null && (row.length === null || row.length > lengthMax)) return false;
+      if (difficultyMin !== null && (row.difficulty === null || row.difficulty < difficultyMin)) return false;
+      if (difficultyMax !== null && (row.difficulty === null || row.difficulty > difficultyMax)) return false;
       return true;
     });
   }
@@ -117,11 +125,11 @@
 
       const script = document.createElement("div");
       script.className = "result-script";
-      script.textContent = row.Script || row.Prompt || "(No script)";
+      script.textContent = row.script || row.prompt || "(No script)";
 
       const meta = document.createElement("div");
       meta.className = "result-meta";
-      meta.textContent = `${row.Scene || ""} / ${row.Type || ""} / ${row.Length ?? ""} / ${row.Difficulty ?? ""} / ${row.Time ?? ""}`;
+      meta.textContent = `${row.scene || ""} / ${row.type || ""} / ${row.length ?? ""} / ${row.difficulty ?? ""} / ${row.timeSec ?? ""}`;
 
       content.appendChild(script);
       content.appendChild(meta);
@@ -158,33 +166,56 @@
     updateSelectedCount();
   }
 
+  function setDataSourceLabel(source) {
+    if (!elements.dataSourceBadge) return;
+    const label = source === "cache" ? "cached" : "JSON";
+    elements.dataSourceBadge.textContent = `Data source: ${label}`;
+  }
+
+  function showBanner(message, type) {
+    if (!elements.refreshBanner) return;
+    if (!message) {
+      elements.refreshBanner.classList.add("hidden");
+      elements.refreshBanner.textContent = "";
+      elements.refreshBanner.classList.remove("banner-success", "banner-error");
+      return;
+    }
+    elements.refreshBanner.textContent = message;
+    elements.refreshBanner.classList.remove("hidden");
+    elements.refreshBanner.classList.toggle("banner-success", type === "success");
+    elements.refreshBanner.classList.toggle("banner-error", type === "error");
+  }
+
+  function resetFilterInputs() {
+    elements.filterTimeMin.value = "";
+    elements.filterTimeMax.value = "";
+    elements.filterLengthMin.value = "";
+    elements.filterLengthMax.value = "";
+    elements.filterDifficultyMin.value = "";
+    elements.filterDifficultyMax.value = "";
+  }
+
   function initFilters() {
-    const dates = utils.uniqueInOrder(state.rows.map((row) => row.Date));
-    const sets = utils.uniqueInOrder(state.rows.map((row) => row.Set));
-    const scenes = utils.uniqueInOrder(state.rows.map((row) => row.Scene));
-    const types = utils.uniqueInOrder(state.rows.map((row) => row.Type));
+    const dates = utils.uniqueInOrder(state.rows.map((row) => row.date));
+    const sets = utils.uniqueInOrder(state.rows.map((row) => row.set));
+    const scenes = utils.uniqueInOrder(state.rows.map((row) => row.scene));
+    const types = utils.uniqueInOrder(state.rows.map((row) => row.type));
 
     buildCheckboxList(elements.filterDate, dates);
     buildCheckboxList(elements.filterSet, sets);
     buildCheckboxList(elements.filterScene, scenes);
     buildCheckboxList(elements.filterType, types);
 
-    const times = state.rows.map((row) => row.Time).filter((val) => val !== null);
-    const lengths = state.rows.map((row) => row.Length).filter((val) => val !== null);
-    const diffs = state.rows.map((row) => row.Difficulty).filter((val) => val !== null);
+    const times = state.rows.map((row) => row.timeSec).filter((val) => val !== null);
+    const lengths = state.rows.map((row) => row.length).filter((val) => val !== null);
+    const diffs = state.rows.map((row) => row.difficulty).filter((val) => val !== null);
 
-    if (times.length) {
-      elements.filterTimeMin.placeholder = Math.min(...times);
-      elements.filterTimeMax.placeholder = Math.max(...times);
-    }
-    if (lengths.length) {
-      elements.filterLengthMin.placeholder = Math.min(...lengths);
-      elements.filterLengthMax.placeholder = Math.max(...lengths);
-    }
-    if (diffs.length) {
-      elements.filterDifficultyMin.placeholder = Math.min(...diffs);
-      elements.filterDifficultyMax.placeholder = Math.max(...diffs);
-    }
+    elements.filterTimeMin.placeholder = times.length ? Math.min(...times) : "";
+    elements.filterTimeMax.placeholder = times.length ? Math.max(...times) : "";
+    elements.filterLengthMin.placeholder = lengths.length ? Math.min(...lengths) : "";
+    elements.filterLengthMax.placeholder = lengths.length ? Math.max(...lengths) : "";
+    elements.filterDifficultyMin.placeholder = diffs.length ? Math.min(...diffs) : "";
+    elements.filterDifficultyMax.placeholder = diffs.length ? Math.max(...diffs) : "";
 
     const filterContainers = [
       elements.filterDate,
@@ -193,34 +224,26 @@
       elements.filterType,
     ];
 
-    filterContainers.forEach((container) => {
-      container.addEventListener("change", refresh);
-    });
+    if (!filtersBound) {
+      filterContainers.forEach((container) => {
+        container.addEventListener("change", refresh);
+      });
 
-    [
-      elements.filterTimeMin,
-      elements.filterTimeMax,
-      elements.filterLengthMin,
-      elements.filterLengthMax,
-      elements.filterDifficultyMin,
-      elements.filterDifficultyMax,
-    ].forEach((input) => {
-      input.addEventListener("input", refresh);
-    });
+      [
+        elements.filterTimeMin,
+        elements.filterTimeMax,
+        elements.filterLengthMin,
+        elements.filterLengthMax,
+        elements.filterDifficultyMin,
+        elements.filterDifficultyMax,
+      ].forEach((input) => {
+        input.addEventListener("input", refresh);
+      });
+      filtersBound = true;
+    }
   }
 
   function setupImport() {
-    if (Array.isArray(window.LR_DATA_SEED) && window.LR_DATA_SEED.length) {
-      elements.importArea.classList.add("hidden");
-      return;
-    }
-    if (!window.XLSX) {
-      elements.importArea.classList.remove("hidden");
-      elements.importStatus.textContent = "XLSX library not loaded.";
-      elements.importButton.disabled = true;
-      return;
-    }
-
     elements.importButton.addEventListener("click", () => {
       elements.importFile.click();
     });
@@ -229,18 +252,20 @@
       const file = elements.importFile.files[0];
       if (!file) return;
       try {
-        const rows = await dataApi.parseFile(file);
+        const parsed = await dataApi.parseFile(file);
+        const rows = parsed.rows || [];
         window.LR_DATA = rows;
         localStorage.setItem("LR_DATA_JSON", JSON.stringify(rows));
-        console.log("Imported rows:", rows.length);
-        console.log("First row:", rows[0]);
         state.rows = rows;
-        dataApi.saveCache(rows);
-        elements.importStatus.textContent = `Loaded ${rows.length} rows from ${file.name}.`;
+        dataApi.saveCache(rows, parsed.version || "");
+        elements.importStatus.textContent = `Loaded ${rows.length} items from ${file.name}.`;
+        showBanner(`Data refreshed. Loaded ${rows.length} items.`, "success");
+        setDataSourceLabel("json");
         initFilters();
         refresh();
+        elements.importFile.value = "";
       } catch (err) {
-        alert("Failed to read the Excel file. Please try again.");
+        showBanner("Failed to read TestData.json. Please try again.", "error");
       }
     });
   }
@@ -257,6 +282,23 @@
       saveSelected();
       refresh();
     });
+
+    if (elements.selectAllFiltered) {
+      elements.selectAllFiltered.addEventListener("click", () => {
+        const filtered = applyFilters();
+        filtered.forEach((row) => state.selected.add(row.id));
+        saveSelected();
+        refresh();
+      });
+    }
+
+    if (elements.clearSelection) {
+      elements.clearSelection.addEventListener("click", () => {
+        state.selected.clear();
+        saveSelected();
+        refresh();
+      });
+    }
 
     elements.practiceSelected.addEventListener("click", () => {
       const count = state.selected.size;
@@ -279,6 +321,48 @@
     elements.confirmModal.addEventListener("click", (event) => {
       if (event.target === elements.confirmModal) closeModal();
     });
+
+    if (elements.refreshData) {
+      elements.refreshData.addEventListener("click", async () => {
+        console.log("[refresh] clicked");
+        console.log("[refresh] protocol", location.protocol);
+        localStorage.removeItem(DATA_KEY);
+        localStorage.removeItem(SELECTED_KEY);
+        localStorage.removeItem("LR_DATA_VERSION");
+        state.selected = new Set();
+        updateSelectedCount();
+
+        resetFilterInputs();
+        showBanner("", "");
+
+        if (location.protocol === "file:") {
+          elements.importArea.classList.remove("hidden");
+          elements.importStatus.textContent = "Offline mode: please import TestData.json again.";
+          showBanner("Offline mode: please import TestData.json again.", "error");
+          elements.importFile.value = "";
+          state.rows = [];
+          initFilters();
+          refresh();
+          setDataSourceLabel("json");
+          return;
+        }
+
+        const data = await dataApi.loadData({ forceFetch: true, allowCache: false });
+        if (data.status !== "ok") {
+          elements.importArea.classList.remove("hidden");
+          elements.importStatus.textContent = "Unable to load TestData.json. Please try again.";
+          showBanner(`Refresh failed: ${data.error || "Unable to load TestData.json."}`, "error");
+          return;
+        }
+        state.rows = data.rows || [];
+        window.LR_DATA = state.rows;
+        initFilters();
+        refresh();
+        console.log("[refresh] reloaded items", state.rows.length);
+        showBanner(`Data refreshed. Loaded ${state.rows.length} items.`, "success");
+        setDataSourceLabel(data.source === "cache" ? "cache" : "json");
+      });
+    }
   }
 
   async function init() {
@@ -287,8 +371,13 @@
     closeModal();
 
     const data = await dataApi.loadData();
-    if (data.status === "need_import") {
+    if (data.status !== "ok") {
       elements.importArea.classList.remove("hidden");
+      elements.importStatus.textContent =
+        location.protocol === "file:"
+          ? "Offline mode: please import TestData.json again."
+          : "Unable to load TestData.json. Please import it.";
+      showBanner(data.error ? `Load failed: ${data.error}` : "", "error");
       return;
     }
 
@@ -297,6 +386,11 @@
     window.LR_DATA = state.rows;
     initFilters();
     refresh();
+    setDataSourceLabel(data.source === "cache" ? "cache" : "json");
+    if (location.protocol === "file:") {
+      elements.importArea.classList.remove("hidden");
+      elements.importStatus.textContent = "Offline mode: import TestData.json to refresh.";
+    }
   }
 
   document.addEventListener("DOMContentLoaded", init);

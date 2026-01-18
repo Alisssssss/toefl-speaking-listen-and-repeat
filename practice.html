@@ -11,8 +11,23 @@
   <div class="page">
     <header class="practice-header">
       <div id="question-count" class="meta">Question 0 of 0</div>
-      <button id="redo-btn" class="btn">重做</button>
+      <div class="practice-header-actions">
+        <button id="return-btn" class="btn">Return to Home</button>
+        <button id="redo-btn" class="btn">重做</button>
+      </div>
     </header>
+
+    <section id="import-area" class="import-card hidden">
+      <div class="import-text">
+        <h2>Import JSON</h2>
+        <p>Select <strong>TestData.json</strong> from this folder.</p>
+        <div id="import-status" class="meta"></div>
+      </div>
+      <div class="import-actions">
+        <input id="import-file" type="file" accept=".json" class="hidden" />
+        <button id="import-button" class="btn btn-primary">Choose JSON</button>
+      </div>
+    </section>
 
     <main class="practice-card">
       <h1 class="practice-title">Listen and repeat only once.</h1>
@@ -55,25 +70,24 @@
         <audio id="recording-audio" preload="metadata"></audio>
       </section>
 
-      <section class="practice-actions">
-        <div class="nav-buttons">
-          <button id="prev-btn" class="btn">Prev</button>
-          <button id="next-btn" class="btn">Next</button>
-        </div>
-        <button id="download-btn" class="btn btn-primary">Download</button>
-      </section>
+    <section class="practice-actions">
+      <div class="nav-buttons">
+        <button id="prev-btn" class="btn">Prev</button>
+        <button id="next-btn" class="btn">Next</button>
+      </div>
+      <div id="complete-text" class="meta hidden">Practice complete.</div>
+      <button id="download-btn" class="btn btn-primary">Download</button>
+    </section>
     </main>
 
     <section id="practice-empty" class="card hidden">
       <h2>No data available</h2>
-      <p>Please return to the homepage and import the Excel file.</p>
-      <a class="btn btn-primary" href="./index.html">Go to Home</a>
+      <p>No selected questions found. Please return to the homepage.</p>
+      <a class="btn btn-primary" href="./index.html">Return to Home</a>
     </section>
   </div>
 
-  <script src="./js/vendor/xlsx.full.min.js"></script>
   <script src="./js/app.js"></script>
-  <script src="./js/data.seed.js"></script>
   <script src="./js/data.js"></script>
   <script src="./js/practice.js"></script>
 </body>

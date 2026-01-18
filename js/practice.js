@@ -3,9 +3,21 @@
   const dataApi = window.LR.data;
   const SELECTED_KEY = "LR_SELECTED_IDS";
 
+  const PHASES = {
+    IDLE: "idle",
+    PLAYING_AUDIO: "playingAudio",
+    WAITING: "waiting2s",
+    RECORDING: "recording",
+    COMPLETE: "complete",
+  };
+
   const elements = {
     questionCount: utils.qs("#question-count"),
     redoBtn: utils.qs("#redo-btn"),
+    importArea: utils.qs("#import-area"),
+    importButton: utils.qs("#import-button"),
+    importFile: utils.qs("#import-file"),
+    importStatus: utils.qs("#import-status"),
     pictureWrap: utils.qs("#picture-wrap"),
     pictureImg: utils.qs("#picture-img"),
     promptAudio: utils.qs("#prompt-audio"),
@@ -21,6 +33,8 @@
     recordingMessage: utils.qs("#recording-message"),
     prevBtn: utils.qs("#prev-btn"),
     nextBtn: utils.qs("#next-btn"),
+    returnBtn: utils.qs("#return-btn"),
+    completeText: utils.qs("#complete-text"),
     downloadBtn: utils.qs("#download-btn"),
     emptyState: utils.qs("#practice-empty"),
     practiceCard: utils.qs(".practice-card"),
@@ -29,19 +43,32 @@
   const state = {
     rows: [],
     index: 0,
+    selectedIds: [],
     itemStates: {},
     countdownTimer: null,
     pendingCountdown: null,
     countdownRemaining: 0,
-    isCounting: false,
+    phase: PHASES.IDLE,
     promptAvailable: false,
     recordingAvailable: false,
     mediaRecorder: null,
     mediaStream: null,
   };
 
+  let eventsBound = false;
+
   function getSelectedIds() {
     return utils.getStorage(SELECTED_KEY, []);
+  }
+
+  function isCacheInvalid(rows) {
+    if (!Array.isArray(rows) || !rows.length) return true;
+    return rows.some((row) => {
+      if (!row) return true;
+      if (row.Date !== undefined || row.Time !== undefined) return true;
+      if (!Number.isFinite(row.timeSec) || row.timeSec <= 0) return true;
+      return false;
+    });
   }
 
   function getItemState(id) {
@@ -68,7 +95,7 @@
     if (state.mediaRecorder && state.mediaRecorder.state === "recording") {
       state.mediaRecorder.stop();
     }
-    state.isCounting = false;
+    state.phase = PHASES.IDLE;
     elements.timerCount.textContent = "--";
     elements.recordingStatus.textContent = "";
   }
@@ -111,22 +138,40 @@
       state.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       return true;
     } catch (err) {
+      console.log("[practice] recorder failed");
       return false;
     }
   }
 
-  function startRecording(durationSec, itemState) {
-    if (!state.mediaStream) return false;
+  function pickMimeType() {
+    const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"];
+    if (!window.MediaRecorder || !window.MediaRecorder.isTypeSupported) return "";
+    return candidates.find((type) => window.MediaRecorder.isTypeSupported(type)) || "";
+  }
 
-    const options = {};
-    const recorder = new MediaRecorder(state.mediaStream, options);
+  function startRecording(itemState) {
+    if (!state.mediaStream) return false;
+    let recorder;
     const chunks = [];
+    const mimeType = pickMimeType();
+
+    try {
+      recorder = mimeType ? new MediaRecorder(state.mediaStream, { mimeType }) : new MediaRecorder(state.mediaStream);
+    } catch (err) {
+      console.log("[practice] recorder failed");
+      return false;
+    }
 
     recorder.addEventListener("dataavailable", (event) => {
       if (event.data && event.data.size > 0) chunks.push(event.data);
     });
 
+    recorder.addEventListener("start", () => {
+      console.log("[practice] recorder started");
+    });
+
     recorder.addEventListener("stop", () => {
+      console.log("[practice] recorder stopped");
       const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
       if (itemState.recordingUrl) {
         URL.revokeObjectURL(itemState.recordingUrl);
@@ -140,78 +185,120 @@
 
     recorder.start();
     state.mediaRecorder = recorder;
-    setTimeout(() => {
-      if (recorder.state === "recording") recorder.stop();
-    }, durationSec * 1000);
-
     return true;
   }
 
+  function completeCountdown() {
+    if (state.countdownTimer) {
+      clearInterval(state.countdownTimer);
+      state.countdownTimer = null;
+    }
+    if (state.mediaRecorder && state.mediaRecorder.state === "recording") {
+      state.mediaRecorder.stop();
+    }
+    state.phase = PHASES.COMPLETE;
+    elements.timerCount.textContent = "0";
+    elements.recordingStatus.textContent = "Complete";
+    if (!state.recordingAvailable) {
+      elements.recordingMessage.textContent = "Recording not available on this device.";
+    }
+  }
+
   function startCountdown(seconds) {
-    resetCountdown();
+    state.phase = PHASES.RECORDING;
     state.countdownRemaining = seconds;
-    state.isCounting = true;
-    elements.timerCount.textContent = seconds.toString();
+    elements.timerCount.textContent = Math.max(seconds, 0).toString();
     elements.recordingStatus.textContent = "Recording";
+    elements.recordingMessage.textContent = "";
 
     const item = state.rows[state.index];
     const itemState = getItemState(item.id);
 
-    ensureMedia().then((available) => {
-      state.recordingAvailable = available;
-      if (available) {
-        startRecording(seconds, itemState);
-      } else {
+    console.log(`[practice] start countdown timeSec=${seconds}`);
+
+    ensureMedia()
+      .then((available) => {
+        state.recordingAvailable = available;
+        if (available && state.phase === PHASES.RECORDING) {
+          startRecording(itemState);
+        } else {
+          itemState.hadFallback = true;
+          console.log("[practice] recorder failed");
+        }
+      })
+      .catch(() => {
+        state.recordingAvailable = false;
         itemState.hadFallback = true;
-      }
-    });
+        console.log("[practice] recorder failed");
+      });
+
+    if (seconds <= 0) {
+      completeCountdown();
+      return;
+    }
 
     state.countdownTimer = setInterval(() => {
       state.countdownRemaining -= 1;
       elements.timerCount.textContent = Math.max(state.countdownRemaining, 0).toString();
       if (state.countdownRemaining <= 0) {
-        clearInterval(state.countdownTimer);
-        state.countdownTimer = null;
-        state.isCounting = false;
-        elements.recordingStatus.textContent = "Complete";
-        if (!state.recordingAvailable) {
-          elements.recordingMessage.textContent = "Recording not available on this device.";
-        }
+        completeCountdown();
       }
     }, 1000);
   }
 
-  function scheduleCountdown() {
+  function startCountdownFlow() {
+    if (state.phase === PHASES.WAITING || state.phase === PHASES.RECORDING) return;
+    if (state.pendingCountdown) return;
+    if (state.mediaRecorder && state.mediaRecorder.state === "recording") {
+      state.mediaRecorder.stop();
+    }
     const item = state.rows[state.index];
-    const seconds = Number(item.Time) || 0;
-    if (state.isCounting || state.pendingCountdown) return;
-    resetCountdown();
-    elements.recordingMessage.textContent = "";
-    if (seconds <= 0) {
-      elements.timerCount.textContent = "0";
+    const seconds = Number(item.timeSec);
+    if (!Number.isFinite(seconds) || seconds <= 0) {
+      elements.recordingStatus.textContent = "Invalid timeSec in data";
+      elements.timerCount.textContent = "--";
       return;
     }
+    state.phase = PHASES.WAITING;
+    elements.recordingMessage.textContent = "";
     state.pendingCountdown = setTimeout(() => {
+      state.pendingCountdown = null;
       startCountdown(seconds);
     }, 2000);
   }
 
+  function resolveMediaPath(value, folder) {
+    if (value === null || value === undefined) return "";
+    const raw = String(value).trim();
+    if (!raw) return "";
+    if (/^https?:\/\//i.test(raw)) return raw;
+    if (raw.startsWith("/")) return raw;
+    if (raw.startsWith("./")) return raw;
+    if (raw.startsWith(`${folder}/`)) return `./${raw}`;
+    return `./${folder}/${raw}`;
+  }
+
   function setupPromptAudio(item) {
-    const audioFile = item.Audio ? `./Audio/${item.Audio}` : "";
+    const audioFile = resolveMediaPath(item.audio, "Audio");
     state.promptAvailable = Boolean(audioFile);
     elements.promptAudio.src = audioFile;
     elements.promptPlay.disabled = false;
     elements.promptProgress.disabled = !state.promptAvailable;
     elements.promptTime.textContent = "0:00";
+    elements.promptPlay.textContent = state.promptAvailable ? "▶" : "Start";
+    elements.promptPlay.classList.toggle("text-button", !state.promptAvailable);
 
     elements.promptAudio.onended = () => {
-      scheduleCountdown();
+      console.log("[practice] audio ended");
+      startCountdownFlow();
     };
 
     elements.promptAudio.onerror = () => {
       state.promptAvailable = false;
       elements.promptPlay.disabled = false;
       elements.promptProgress.disabled = true;
+      elements.promptPlay.textContent = "Start";
+      elements.promptPlay.classList.add("text-button");
     };
   }
 
@@ -241,11 +328,12 @@
     if (!item) return;
 
     resetCountdown();
+    state.recordingAvailable = false;
 
     elements.questionCount.textContent = `Question ${state.index + 1} of ${state.rows.length}`;
 
-    if (item.Picture) {
-      elements.pictureImg.src = `./Pic/${item.Picture}`;
+    if (item.picture) {
+      elements.pictureImg.src = resolveMediaPath(item.picture, "Pic");
       elements.pictureWrap.classList.remove("hidden");
       elements.pictureImg.onerror = () => {
         elements.pictureWrap.classList.add("hidden");
@@ -257,8 +345,11 @@
     setupPromptAudio(item);
     updateRecordingPlayer(getItemState(item.id));
 
+    const isLast = state.index === state.rows.length - 1;
     elements.prevBtn.disabled = state.index === 0;
-    elements.nextBtn.disabled = state.index === state.rows.length - 1;
+    elements.nextBtn.disabled = isLast;
+    elements.nextBtn.classList.toggle("hidden", isLast);
+    elements.completeText.classList.toggle("hidden", !isLast);
   }
 
   function downloadFile(blob, filename) {
@@ -274,7 +365,7 @@
   function handleDownload() {
     const item = state.rows[state.index];
     const itemState = getItemState(item.id);
-    const fileBase = `LR_${item.Date}_${item.SetPadded}_${item.NumberPadded}`;
+    const fileBase = `LR_${item.date}_${item.set}_${item.num}`;
 
     if (itemState.recordingBlob) {
       const ext = itemState.recordingMime.includes("ogg") ? "ogg" : "webm";
@@ -300,10 +391,19 @@
     );
     setupRecordingPlayer();
 
+    elements.promptAudio.addEventListener("play", () => {
+      if (state.promptAvailable) {
+        state.phase = PHASES.PLAYING_AUDIO;
+      }
+    });
+
     elements.promptPlay.addEventListener("click", () => {
       if (!state.promptAvailable) {
-        scheduleCountdown();
+        ensureMedia();
+        startCountdownFlow();
+        return;
       }
+      ensureMedia();
     });
 
     elements.redoBtn.addEventListener("click", () => {
@@ -322,7 +422,7 @@
         elements.promptAudio.currentTime = 0;
         elements.promptAudio.play();
       } else {
-        scheduleCountdown();
+        startCountdownFlow();
       }
     });
 
@@ -338,33 +438,103 @@
       renderItem();
     });
 
+    elements.returnBtn.addEventListener("click", () => {
+      localStorage.removeItem("LR_SELECTED_IDS");
+      window.location.href = "./index.html";
+    });
+
     elements.downloadBtn.addEventListener("click", handleDownload);
+  }
+
+  function showImport(message) {
+    if (!elements.importArea) return;
+    elements.importArea.classList.remove("hidden");
+    if (elements.importStatus) elements.importStatus.textContent = message || "";
+  }
+
+  function hideImport() {
+    if (!elements.importArea) return;
+    elements.importArea.classList.add("hidden");
+  }
+
+  function bindImport() {
+    if (!elements.importButton || !elements.importFile) return;
+    elements.importButton.addEventListener("click", () => {
+      elements.importFile.click();
+    });
+
+    elements.importFile.addEventListener("change", async () => {
+      const file = elements.importFile.files[0];
+      if (!file) return;
+      try {
+        const parsed = await dataApi.parseFile(file);
+        const rows = parsed.rows || [];
+        localStorage.setItem("LR_DATA_JSON", JSON.stringify(rows));
+        dataApi.saveCache(rows, parsed.version || "");
+        hideImport();
+        handleRows(rows);
+        elements.importFile.value = "";
+      } catch (err) {
+        showImport("Failed to read TestData.json. Please try again.");
+      }
+    });
+  }
+
+  function handleRows(rows) {
+    state.rows = (rows || []).filter((row) => state.selectedIds.includes(row.id));
+    state.index = 0;
+    state.itemStates = {};
+    if (!state.rows.length) {
+      elements.practiceCard.classList.add("hidden");
+      elements.emptyState.classList.remove("hidden");
+      return;
+    }
+    elements.practiceCard.classList.remove("hidden");
+    elements.emptyState.classList.add("hidden");
+    if (!eventsBound) {
+      setupEvents();
+      eventsBound = true;
+    }
+    renderItem();
   }
 
   async function init() {
     const selected = getSelectedIds();
+    state.selectedIds = selected;
+    bindImport();
+
     if (!selected.length) {
       elements.practiceCard.classList.add("hidden");
       elements.emptyState.classList.remove("hidden");
       return;
     }
 
-    const data = await dataApi.loadData();
+    let cached = utils.getStorage("LR_DATA_JSON", null);
+    if (cached && isCacheInvalid(cached)) {
+      localStorage.removeItem("LR_DATA_JSON");
+      localStorage.removeItem("LR_DATA_VERSION");
+      cached = null;
+    }
+    if (cached) {
+      hideImport();
+      handleRows(cached);
+      return;
+    }
+
+    const data = await dataApi.loadData({ forceFetch: true, allowCache: false });
     if (data.status !== "ok") {
       elements.practiceCard.classList.add("hidden");
-      elements.emptyState.classList.remove("hidden");
+      elements.emptyState.classList.add("hidden");
+      showImport(
+        location.protocol === "file:"
+          ? "Offline mode: please import TestData.json again."
+          : "Unable to load TestData.json. Please import it."
+      );
       return;
     }
 
-    state.rows = (data.rows || []).filter((row) => selected.includes(row.id));
-    if (!state.rows.length) {
-      elements.practiceCard.classList.add("hidden");
-      elements.emptyState.classList.remove("hidden");
-      return;
-    }
-
-    setupEvents();
-    renderItem();
+    hideImport();
+    handleRows(data.rows || []);
   }
 
   document.addEventListener("DOMContentLoaded", init);
