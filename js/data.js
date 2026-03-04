@@ -113,13 +113,6 @@
     const forceFetch = Boolean(opts.forceFetch);
     const cached = allowCache ? loadCache() : null;
 
-    if (location.protocol === "file:") {
-      if (cached) {
-        return { status: "ok", rows: cached, source: "cache" };
-      }
-      return { status: "need_import", error: "Offline mode: please import TestData.json again." };
-    }
-
     if (!forceFetch && cached) {
       // Still attempt a fresh fetch; cached is used only as fallback.
     }
@@ -138,7 +131,12 @@
       }
       return {
         status: "need_import",
-        error: err && err.message ? err.message : "Failed to load TestData.json",
+        error:
+          location.protocol === "file:"
+            ? "Offline mode: please import TestData.json again."
+            : err && err.message
+              ? err.message
+              : "Failed to load TestData.json",
       };
     }
   }

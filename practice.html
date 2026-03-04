@@ -5,6 +5,45 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>LR Practice</title>
   <link rel="stylesheet" href="./css/styles.css" />
+  <style>
+    #picture-wrap.practice-image-nav {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    #picture-wrap .image-container {
+      display: flex;
+      justify-content: center;
+    }
+
+    #picture-wrap .picture-nav-btn {
+      position: static;
+      top: auto;
+      left: auto;
+      right: auto;
+      transform: none;
+      width: 56px;
+      min-width: 56px;
+      height: 56px;
+      border-radius: 999px;
+      padding: 0;
+      line-height: 1;
+      font-size: 32px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      z-index: auto;
+    }
+
+    #picture-wrap .picture-nav-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+  </style>
 </head>
 <body>
   <div class="teal-bar"></div>
@@ -32,8 +71,12 @@
     <main class="practice-card">
       <h1 class="practice-title">Listen and repeat only once.</h1>
 
-      <section id="picture-wrap" class="picture-wrap hidden">
-        <img id="picture-img" alt="Question visual" />
+      <section id="picture-wrap" class="picture-wrap practice-image-nav hidden">
+        <button id="prev-btn-side" class="btn picture-nav-btn picture-nav-left" type="button" aria-label="Prev">‹</button>
+        <div class="image-container">
+          <img id="picture-img" alt="Question visual" />
+        </div>
+        <button id="next-btn-side" class="btn picture-nav-btn picture-nav-right" type="button" aria-label="Next">›</button>
       </section>
 
       <section class="audio-block">

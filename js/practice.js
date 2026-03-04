@@ -33,6 +33,8 @@
     recordingMessage: utils.qs("#recording-message"),
     prevBtn: utils.qs("#prev-btn"),
     nextBtn: utils.qs("#next-btn"),
+    prevBtnSide: utils.qs("#prev-btn-side"),
+    nextBtnSide: utils.qs("#next-btn-side"),
     returnBtn: utils.qs("#return-btn"),
     completeText: utils.qs("#complete-text"),
     downloadBtn: utils.qs("#download-btn"),
@@ -323,6 +325,29 @@
     );
   }
 
+  function playPromptFromImageClick() {
+    if (!state.promptAvailable || !elements.promptAudio.src) return;
+    elements.promptAudio.currentTime = 0;
+    const playPromise = elements.promptAudio.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch((err) => {
+        console.error("[practice] prompt play failed on image click", err);
+      });
+    }
+  }
+
+  function goPrev() {
+    if (state.index === 0) return;
+    state.index -= 1;
+    renderItem();
+  }
+
+  function goNext() {
+    if (state.index >= state.rows.length - 1) return;
+    state.index += 1;
+    renderItem();
+  }
+
   function renderItem() {
     const item = state.rows[state.index];
     if (!item) return;
@@ -348,6 +373,8 @@
     const isLast = state.index === state.rows.length - 1;
     elements.prevBtn.disabled = state.index === 0;
     elements.nextBtn.disabled = isLast;
+    if (elements.prevBtnSide) elements.prevBtnSide.disabled = state.index === 0;
+    if (elements.nextBtnSide) elements.nextBtnSide.disabled = isLast;
     elements.nextBtn.classList.toggle("hidden", isLast);
     elements.completeText.classList.toggle("hidden", !isLast);
   }
@@ -426,17 +453,14 @@
       }
     });
 
-    elements.prevBtn.addEventListener("click", () => {
-      if (state.index === 0) return;
-      state.index -= 1;
-      renderItem();
-    });
-
-    elements.nextBtn.addEventListener("click", () => {
-      if (state.index >= state.rows.length - 1) return;
-      state.index += 1;
-      renderItem();
-    });
+    elements.prevBtn.addEventListener("click", goPrev);
+    elements.nextBtn.addEventListener("click", goNext);
+    if (elements.prevBtnSide) elements.prevBtnSide.addEventListener("click", goPrev);
+    if (elements.nextBtnSide) elements.nextBtnSide.addEventListener("click", goNext);
+    if (elements.pictureImg) {
+      elements.pictureImg.style.cursor = "pointer";
+      elements.pictureImg.addEventListener("click", playPromptFromImageClick);
+    }
 
     elements.returnBtn.addEventListener("click", () => {
       localStorage.removeItem("LR_SELECTED_IDS");
